@@ -38,7 +38,7 @@ def supabase_tool_handler(func: Callable) -> Callable:
 load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-PORT = int(os.environ.get("PORT", 8000))  # 默认端口改为 8000
+PORT = int(os.environ.get("PORT", 8080))  # 【修复】将默认端口改回 8080
 
 # 环境变量检查
 if not SUPABASE_URL or not SUPABASE_KEY:

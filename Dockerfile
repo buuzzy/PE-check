@@ -45,14 +45,14 @@ USER appuser
 
 # 环境变量设置
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
+ENV PORT=8080 
 
 # 健康检查 (确保 curl 可用)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/ || exit 1
 
 # 暴露端口
-EXPOSE ${PORT}
+EXPOSE ${PORT} 
 
-# 【修复2 - 核心】启动命令：移除 --workers 参数，确保单进程运行
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+# 启动命令：移除 --workers 参数，确保单进程运行
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"] # 【修复】硬编码为 8080
