@@ -89,8 +89,9 @@ def get_pe_percentile(stock_code: str) -> str:
     if not (normalized_code := normalize_stock_code(stock_code)):
         return f"股票代码格式错误：'{stock_code}'。请使用标准格式，如：sh600739 或 sz301011"
     
+    # 只请求数据库中存在的列
     response = supabase.table('stocks') \
-        .select('stock_code, stock_name, pe_percentile_3y') \
+        .select('stock_code, pe_percentile_3y') \
         .eq('stock_code', normalized_code) \
         .execute()
     
@@ -99,12 +100,13 @@ def get_pe_percentile(stock_code: str) -> str:
         
     stock_data = response.data[0]
     pe_value = stock_data.get('pe_percentile_3y')
-    stock_name = stock_data.get('stock_name', '未知')
     
     if pe_value is None:
-        return f"股票 {normalized_code}（{stock_name}）暂无PE分位数据"
+        # 移除了 stock_name，因为我们无法获取它
+        return f"股票 {normalized_code} 暂无PE分位数据"
         
-    return f"股票 {normalized_code}（{stock_name}）的近三年PE分位：{pe_value:.4f}"
+    # 移除了 stock_name，因为我们无法获取它
+    return f"股票 {normalized_code} 的近三年PE分位：{pe_value:.4f}"
 
 @app.get("/")
 async def health_check() -> Dict[str, str]:
