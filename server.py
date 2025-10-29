@@ -46,12 +46,16 @@ app = FastAPI(title="PE分位数查询工具", version="1.0.0")
 mcp = FastMCP("PE Query Tool")
 
 def normalize_stock_code(code: str) -> Optional[str]:
-    """统一股票代码格式"""
+    """统一股票代码格式为 Supabase 格式 (sh600739 或 sz301011)"""
+    # Tushare 格式转换 (000603.SZ -> sz000603)
     if match := re.match(r'^(\d{6})\.(SH|SZ)$', code, re.IGNORECASE):
         code, market = match.groups()
         return f"{market.lower()}{code}"
+    
+    # 直接格式检查 (已经是 sh600739 或 sz301011 格式)
     if re.match(r'^(sh|sz)\d{6}$', code, re.IGNORECASE):
         return code.lower()
+    
     return None
 
 @mcp.tool()
@@ -92,10 +96,10 @@ async def health_check() -> Dict[str, str]:
 # --- MCP SSE 集成 ---
 MCP_BASE_PATH = "/mcp"
 try:
-    messages_full_path = f"{MCP_BASE_PATH}/messages/"  # 重命名变量以保持一致性
+    messages_full_path = f"{MCP_BASE_PATH}/messages/"
     sse_transport = SseServerTransport(messages_full_path)
     
-    async def handle_mcp_sse_handshake(request: Request) -> None:  # 修改函数名和返回类型
+    async def handle_mcp_sse_handshake(request: Request) -> Response:  # 修改返回类型
         async with sse_transport.connect_sse(
             request.scope, 
             request.receive, 
@@ -106,27 +110,30 @@ try:
                 write_stream, 
                 mcp._mcp_server.create_initialization_options()
             )
+        return Response(status_code=204)  # 返回响应对象
 
     # 添加提示信息
     @mcp.prompt()
     def usage_guide() -> str:
         """提供使用指南"""
         return """欢迎使用 PE 分位数查询工具！
-        
-    支持的股票代码格式:
-    1. Tushare 格式: '000603.SZ' 或 '600000.SH'
-    2. 直接格式: 'sz000603' 或 'sh600000'
 
-    示例查询:
-    > get_pe_percentile("000603.SZ")
-    > get_pe_percentile("sz000603")
-    """
+支持的股票代码格式:
+1. Tushare 格式: '600739.SH' 或 '301011.SZ'
+2. 标准格式: 'sh600739' 或 'sz301011'
 
-    # 修改路由注册方式
+示例查询:
+> get_pe_percentile("sh600739")  # 新华百货
+> get_pe_percentile("600739.SH")  # 新华百货
+> get_pe_percentile("sz301011")  # 华立新材
+> get_pe_percentile("301011.SZ")  # 华立新材
+"""
+
+    # 路由注册
     app.add_route(MCP_BASE_PATH, handle_mcp_sse_handshake, methods=["GET"])
     app.mount(messages_full_path, sse_transport.handle_post_message)
 except Exception as e:
-    logging.critical(f"应用 MCP SSE 设置时发生严重错误: {e}")  # 使用更严重的日志级别
+    logging.critical(f"应用 MCP SSE 设置时发生严重错误: {e}")
     sys.exit(1)
 
 if __name__ == "__main__":
