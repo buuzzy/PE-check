@@ -38,7 +38,7 @@ def supabase_tool_handler(func: Callable) -> Callable:
 load_dotenv()
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-PORT = int(os.environ.get("PORT", 8080))
+PORT = int(os.environ.get("PORT", 8000))  # 默认端口改为 8000
 
 # 环境变量检查
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -96,17 +96,15 @@ def get_pe_percentile(stock_code: str) -> str:
         .execute()
     
     if not response.data:
-        return f"未找到股票：{normalized_code}"
+        return f"未找到股票：{stock_code}"  # 使用原始输入的代码
         
     stock_data = response.data[0]
     pe_value = stock_data.get('pe_percentile_3y')
     
     if pe_value is None:
-        # 移除了 stock_name，因为我们无法获取它
-        return f"股票 {normalized_code} 暂无PE分位数据"
+        return f"股票 {stock_code} 暂无PE分位数据"
         
-    # 移除了 stock_name，因为我们无法获取它
-    return f"股票 {normalized_code} 的近三年PE分位：{pe_value:.4f}"
+    return f"股票 {stock_code} 的近三年PE分位：{pe_value:.4f}"
 
 @app.get("/")
 async def health_check() -> Dict[str, str]:
@@ -114,12 +112,11 @@ async def health_check() -> Dict[str, str]:
     return {"status": "healthy"}
 
 # --- MCP SSE 集成 (参考 demo.py 的最终修正版) ---
-MCP_BASE_PATH = "/mcp"
+MCP_BASE_PATH = "/sse"  # 修改为 /sse
 try:
     messages_full_path = f"{MCP_BASE_PATH}/messages/"
     sse_transport = SseServerTransport(messages_full_path)
 
-    # 这个函数处理初始的 GET 请求，它不应返回任何内容，因为 transport 会接管连接。
     async def handle_mcp_sse_handshake(request: Request) -> None:
         """
         处理 MCP 的 SSE 握手。
@@ -151,10 +148,7 @@ try:
 """
 
     # 注册路由
-    # 我们明确告诉类型检查器忽略这一行，因为 mcp 库的实现与 FastAPI 的标准类型不兼容。
     app.add_route(MCP_BASE_PATH, handle_mcp_sse_handshake, methods=["GET"])  # type: ignore
-    
-    # 挂载 ASGI 应用来处理 POST 消息
     app.mount(messages_full_path, sse_transport.handle_post_message)
     
     logging.info("MCP SSE 集成设置完成")
