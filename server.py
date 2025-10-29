@@ -111,36 +111,28 @@ async def health_check() -> Dict[str, str]:
     """健康检查端点"""
     return {"status": "healthy"}
 
-# --- MCP SSE 集成 (最终修正版) ---
+# --- MCP SSE 集成 (参考 demo.py 的最终修正版) ---
 MCP_BASE_PATH = "/mcp"
 try:
     messages_full_path = f"{MCP_BASE_PATH}/messages/"
-    # 创建一个单一的 transport 实例来管理所有会话
     sse_transport = SseServerTransport(messages_full_path)
 
-    # 这个函数处理初始的 GET 请求，它必须返回 Response 类型以兼容 FastAPI
-    async def handle_mcp_sse_handshake(request: Request) -> Response:
+    # 这个函数处理初始的 GET 请求，它不应返回任何内容，因为 transport 会接管连接。
+    async def handle_mcp_sse_handshake(request: Request) -> None:
         """
         处理 MCP 的 SSE 握手。
-        此函数将连接的控制权交给 sse_transport，后者负责维持长连接并发送事件流。
+        此函数不返回任何值，因为 sse_transport 会完全接管响应流。
         """
-        # `connect_sse` 上下文管理器会接管底层的 ASGI 连接。
-        # 在客户端断开连接之前，代码会一直停留在 `with` 块内部。
         async with sse_transport.connect_sse(
-            scope=request.scope,
-            receive=request.receive,
-            send=request._send,
+            request.scope, 
+            request.receive, 
+            request._send
         ) as (read_stream, write_stream):
             await mcp._mcp_server.run(
-                read_stream,
-                write_stream,
-                mcp._mcp_server.create_initialization_options(),
+                read_stream, 
+                write_stream, 
+                mcp._mcp_server.create_initialization_options()
             )
-        
-        # 当客户端断开连接后, `with` 块会退出。
-        # 我们必须在这里返回一个 Response 对象来满足 FastAPI 框架的要求。
-        # 状态码 204 (No Content) 是最合适的，因为所有通信都已通过 SSE 流完成。
-        return Response(status_code=204)
 
     @mcp.prompt()
     def usage_guide() -> str:
@@ -157,8 +149,9 @@ try:
 """
 
     # 注册路由
-    # 使用 add_api_route 注册 GET 握手端点
-    app.add_api_route(MCP_BASE_PATH, handle_mcp_sse_handshake, methods=["GET"])
+    # 我们明确告诉类型检查器忽略这一行，因为 mcp 库的实现与 FastAPI 的标准类型不兼容。
+    app.add_route(MCP_BASE_PATH, handle_mcp_sse_handshake, methods=["GET"])  # type: ignore
+    
     # 挂载 ASGI 应用来处理 POST 消息
     app.mount(messages_full_path, sse_transport.handle_post_message)
     
